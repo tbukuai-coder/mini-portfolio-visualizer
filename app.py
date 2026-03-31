@@ -197,6 +197,15 @@ def calculate_metrics(portfolio_value, risk_free_rate):
         else 0.0
     )
 
+    # Sortino ratio: use downside deviation (only negative returns)
+    downside = returns[returns < 0]
+    downside_deviation = downside.std() * np.sqrt(252)
+    sortino = (
+        float((annual_return_mean - risk_free_rate) / downside_deviation)
+        if downside_deviation > 0
+        else 0.0
+    )
+
     return {
         "total_return": float(total_return),
         "cagr": float(cagr),
@@ -204,6 +213,7 @@ def calculate_metrics(portfolio_value, risk_free_rate):
         "volatility": volatility,
         "max_drawdown": max_drawdown,
         "sharpe": sharpe,
+        "sortino": sortino,
         "initial_value": initial_value,
         "final_value": final_value,
         "years": float(years),
@@ -215,6 +225,7 @@ def calculate_metrics(portfolio_value, risk_free_rate):
             "volatility": "std(daily_return) * sqrt(252) * 100",
             "max_drawdown": "min((value - rolling_max) / rolling_max) * 100",
             "sharpe": "(mean(daily_return) * 252 - risk_free_rate) / (std(daily_return) * sqrt(252))",
+            "sortino": "(mean(daily_return) * 252 - risk_free_rate) / (std(daily_return[daily_return<0]) * sqrt(252))",
         },
     }
 
@@ -292,23 +303,29 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                             "Sharpe Ratio",
                             f"{metrics['sharpe']:.2f}"
                         )
-                        
-                        col1, col2, col3, col4 = st.columns(4)
 
+                        col1, col2, col3, col4 = st.columns(4)
                         col1.metric(
+                            "Sortino Ratio",
+                            f"{metrics['sortino']:.2f}",
+                            help="Sharpe-like ratio using downside deviation (only negative returns)"
+                        )
+                        col2.metric(
                             "Annual Return (mean×252)",
                             f"{metrics['annual_return_mean']:.2f}%",
                             help="Annualized arithmetic return = mean(daily_return) * 252"
                         )
-                        col2.metric(
+                        col3.metric(
                             "Volatility",
                             f"{metrics['volatility']:.2f}%"
                         )
-                        col3.metric(
+                        col4.metric(
                             "Max Drawdown",
                             f"{metrics['max_drawdown']:.2f}%"
                         )
-                        col4.metric(
+
+                        col1, col2, col3, col4 = st.columns(4)
+                        col1.metric(
                             "Time Period",
                             f"{metrics['years']:.1f} years"
                         )
@@ -324,6 +341,7 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                                         f"Volatility (%):         {metrics['formulas']['volatility']}",
                                         f"Max Drawdown (%):       {metrics['formulas']['max_drawdown']}",
                                         f"Sharpe Ratio:           {metrics['formulas']['sharpe']}",
+                                        f"Sortino Ratio:          {metrics['formulas']['sortino']}",
                                     ]
                                 ),
                                 language="text",
