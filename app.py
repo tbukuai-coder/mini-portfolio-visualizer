@@ -281,119 +281,127 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                         
                         # Display metrics
                         st.header("📈 Results")
-                        
-                        # Portfolio metrics
-                        st.subheader("Your Portfolio")
-                        col1, col2, col3, col4 = st.columns(4)
-                        
-                        col1.metric(
-                            "Final Value",
-                            f"${metrics['final_value']:,.2f}",
-                            f"+${metrics['final_value'] - initial_investment:,.2f}"
-                        )
-                        col2.metric(
-                            "Total Return",
-                            f"{metrics['total_return']:.2f}%"
-                        )
-                        col3.metric(
-                            "CAGR",
-                            f"{metrics['cagr']:.2f}%"
-                        )
-                        col4.metric(
-                            "Sharpe Ratio",
-                            f"{metrics['sharpe']:.2f}"
-                        )
 
-                        col1, col2, col3, col4 = st.columns(4)
-                        col1.metric(
-                            "Sortino Ratio",
-                            f"{metrics['sortino']:.2f}",
-                            help="Sharpe-like ratio using downside deviation (only negative returns)"
-                        )
-                        col2.metric(
-                            "Annual Return (mean×252)",
-                            f"{metrics['annual_return_mean']:.2f}%",
-                            help="Annualized arithmetic return = mean(daily_return) * 252"
-                        )
-                        col3.metric(
-                            "Volatility",
-                            f"{metrics['volatility']:.2f}%"
-                        )
-                        col4.metric(
-                            "Max Drawdown",
-                            f"{metrics['max_drawdown']:.2f}%"
-                        )
+                        # Side-by-side: Portfolio (left) vs Benchmark (right)
+                        left, right = st.columns(2)
 
-                        col1, col2, col3, col4 = st.columns(4)
-                        col1.metric(
-                            "Time Period",
-                            f"{metrics['years']:.1f} years"
-                        )
+                        with left:
+                            st.subheader("Your Portfolio")
 
-                        # Show formulas (transparency / reference)
-                        with st.expander("🧮 Metric formulas"):
-                            st.code(
-                                "\n".join(
-                                    [
-                                        f"Total Return (%):        {metrics['formulas']['total_return']}",
-                                        f"CAGR (%):               {metrics['formulas']['cagr']}",
-                                        f"Annual Return (%):      {metrics['formulas']['annual_return_mean']}",
-                                        f"Volatility (%):         {metrics['formulas']['volatility']}",
-                                        f"Max Drawdown (%):       {metrics['formulas']['max_drawdown']}",
-                                        f"Sharpe Ratio:           {metrics['formulas']['sharpe']}",
-                                        f"Sortino Ratio:          {metrics['formulas']['sortino']}",
-                                    ]
-                                ),
-                                language="text",
-                            )
+                            # Deltas should compare portfolio vs benchmark (if benchmark exists)
+                            fv_delta = None
+                            tr_delta = None
+                            cagr_delta = None
+                            sharpe_delta = None
+                            sortino_delta = None
+                            annret_delta = None
+                            vol_delta = None
+                            mdd_delta = None
 
-                        # (Initial investment is already shown above and used as the base for deltas)
-                        
-                        # Benchmark metrics
-                        if benchmark_metrics:
-                            st.subheader(f"📊 Benchmark: {benchmark_symbol.upper()}")
+                            if benchmark_metrics:
+                                fv_delta = metrics["final_value"] - benchmark_metrics["final_value"]
+                                tr_delta = metrics["total_return"] - benchmark_metrics["total_return"]
+                                cagr_delta = metrics["cagr"] - benchmark_metrics["cagr"]
+                                sharpe_delta = metrics["sharpe"] - benchmark_metrics["sharpe"]
+                                sortino_delta = metrics["sortino"] - benchmark_metrics.get("sortino", 0.0)
+                                annret_delta = metrics["annual_return_mean"] - benchmark_metrics["annual_return_mean"]
+                                vol_delta = metrics["volatility"] - benchmark_metrics["volatility"]
+                                mdd_delta = metrics["max_drawdown"] - benchmark_metrics["max_drawdown"]
+
                             col1, col2, col3, col4 = st.columns(4)
-                            
-                            # Show with delta comparison to portfolio
                             col1.metric(
                                 "Final Value",
-                                f"${benchmark_metrics['final_value']:,.2f}",
-                                f"{metrics['final_value'] - benchmark_metrics['final_value']:+,.0f} vs benchmark",
-                                delta_color="normal"
+                                f"${metrics['final_value']:,.2f}",
+                                f"{fv_delta:+,.0f} vs benchmark" if benchmark_metrics else f"+${metrics['final_value'] - initial_investment:,.2f}",
+                                delta_color="normal",
                             )
                             col2.metric(
                                 "Total Return",
-                                f"{benchmark_metrics['total_return']:.2f}%",
-                                f"{metrics['total_return'] - benchmark_metrics['total_return']:+.2f}%",
-                                delta_color="normal"
+                                f"{metrics['total_return']:.2f}%",
+                                f"{tr_delta:+.2f}%" if benchmark_metrics else None,
+                                delta_color="normal",
                             )
                             col3.metric(
                                 "CAGR",
-                                f"{benchmark_metrics['cagr']:.2f}%",
-                                f"{metrics['cagr'] - benchmark_metrics['cagr']:+.2f}%",
-                                delta_color="normal"
+                                f"{metrics['cagr']:.2f}%",
+                                f"{cagr_delta:+.2f}%" if benchmark_metrics else None,
+                                delta_color="normal",
                             )
                             col4.metric(
                                 "Sharpe Ratio",
-                                f"{benchmark_metrics['sharpe']:.2f}",
-                                f"{metrics['sharpe'] - benchmark_metrics['sharpe']:+.2f}",
-                                delta_color="normal"
+                                f"{metrics['sharpe']:.2f}",
+                                f"{sharpe_delta:+.2f}" if benchmark_metrics else None,
+                                delta_color="normal",
                             )
-                            
+
                             col1, col2, col3, col4 = st.columns(4)
-                            
                             col1.metric(
-                                "Volatility",
-                                f"{benchmark_metrics['volatility']:.2f}%",
-                                f"{metrics['volatility'] - benchmark_metrics['volatility']:+.2f}%",
-                                delta_color="inverse"
+                                "Sortino Ratio",
+                                f"{metrics['sortino']:.2f}",
+                                f"{sortino_delta:+.2f}" if benchmark_metrics else None,
+                                help="Sharpe-like ratio using downside deviation (only negative returns)",
+                                delta_color="normal",
                             )
                             col2.metric(
-                                "Max Drawdown",
-                                f"{benchmark_metrics['max_drawdown']:.2f}%",
-                                f"{metrics['max_drawdown'] - benchmark_metrics['max_drawdown']:+.2f}%",
-                                delta_color="inverse"
+                                "Annual Return (mean×252)",
+                                f"{metrics['annual_return_mean']:.2f}%",
+                                f"{annret_delta:+.2f}%" if benchmark_metrics else None,
+                                help="Annualized arithmetic return = mean(daily_return) * 252",
+                                delta_color="normal",
                             )
+                            col3.metric(
+                                "Volatility",
+                                f"{metrics['volatility']:.2f}%",
+                                f"{vol_delta:+.2f}%" if benchmark_metrics else None,
+                                delta_color="inverse" if benchmark_metrics else "normal",
+                            )
+                            col4.metric(
+                                "Max Drawdown",
+                                f"{metrics['max_drawdown']:.2f}%",
+                                f"{mdd_delta:+.2f}%" if benchmark_metrics else None,
+                                delta_color="inverse" if benchmark_metrics else "normal",
+                            )
+
+                            st.caption(f"Time Period: {metrics['years']:.1f} years")
+
+                            # Show formulas (transparency / reference)
+                            with st.expander("🧮 Metric formulas"):
+                                st.code(
+                                    "\n".join(
+                                        [
+                                            f"Total Return (%):        {metrics['formulas']['total_return']}",
+                                            f"CAGR (%):               {metrics['formulas']['cagr']}",
+                                            f"Annual Return (%):      {metrics['formulas']['annual_return_mean']}",
+                                            f"Volatility (%):         {metrics['formulas']['volatility']}",
+                                            f"Max Drawdown (%):       {metrics['formulas']['max_drawdown']}",
+                                            f"Sharpe Ratio:           {metrics['formulas']['sharpe']}",
+                                            f"Sortino Ratio:          {metrics['formulas']['sortino']}",
+                                        ]
+                                    ),
+                                    language="text",
+                                )
+
+                        with right:
+                            st.subheader(f"Benchmark: {benchmark_symbol.upper()}")
+                            if benchmark_metrics:
+                                col1, col2, col3, col4 = st.columns(4)
+                                col1.metric("Final Value", f"${benchmark_metrics['final_value']:,.2f}")
+                                col2.metric("Total Return", f"{benchmark_metrics['total_return']:.2f}%")
+                                col3.metric("CAGR", f"{benchmark_metrics['cagr']:.2f}%")
+                                col4.metric("Sharpe Ratio", f"{benchmark_metrics['sharpe']:.2f}")
+
+                                col1, col2, col3, col4 = st.columns(4)
+                                col1.metric("Sortino Ratio", f"{benchmark_metrics.get('sortino', 0.0):.2f}")
+                                col2.metric(
+                                    "Annual Return (mean×252)",
+                                    f"{benchmark_metrics['annual_return_mean']:.2f}%",
+                                )
+                                col3.metric("Volatility", f"{benchmark_metrics['volatility']:.2f}%")
+                                col4.metric("Max Drawdown", f"{benchmark_metrics['max_drawdown']:.2f}%")
+
+                                st.caption(f"Time Period: {benchmark_metrics['years']:.1f} years")
+                            else:
+                                st.info("No benchmark data available.")
                         
                         # Portfolio value chart
                         st.header("📊 Portfolio Value Over Time")
