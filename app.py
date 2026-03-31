@@ -157,7 +157,7 @@ def calculate_portfolio(prices, allocations, initial_investment, rebalance_freq)
     return portfolio_value
 
 
-def calculate_metrics(portfolio_value, risk_free_rate):
+def calculate_metrics(portfolio_value, risk_free_rate, benchmark_value=None):
     """Calculate portfolio performance metrics.
 
     Notes on definitions (aligned with common portfolio analytics libraries):
@@ -172,6 +172,27 @@ def calculate_metrics(portfolio_value, risk_free_rate):
     """
 
     returns = portfolio_value.pct_change().dropna()
+
+    # Alpha/Beta vs benchmark (optional)
+    alpha_ann = None
+    beta = None
+    if benchmark_value is not None:
+        bench_ret = benchmark_value.pct_change().dropna()
+        common = returns.index.intersection(bench_ret.index)
+        if len(common) >= 3:
+            rp = returns.loc[common]
+            rb = bench_ret.loc[common]
+
+            # Convert annual risk-free rate to daily (simple approximation)
+            rf_daily = risk_free_rate / 252
+
+            var_b = float(rb.var())
+            if var_b > 0:
+                beta = float(rp.cov(rb) / var_b)
+
+                # CAPM-style annualized alpha
+                alpha_daily = float((rp - rf_daily).mean() - beta * (rb - rf_daily).mean())
+                alpha_ann = alpha_daily * 252 * 100  # percent
 
     initial_value = float(portfolio_value.iloc[0])
     final_value = float(portfolio_value.iloc[-1])
@@ -218,6 +239,8 @@ def calculate_metrics(portfolio_value, risk_free_rate):
         "initial_value": initial_value,
         "final_value": final_value,
         "years": float(years),
+        "alpha_ann": alpha_ann,
+        "beta": beta,
         # Human-readable formulas for transparency / UI display
         "formulas": {
             "total_return": "(final / initial - 1) * 100",
@@ -227,6 +250,8 @@ def calculate_metrics(portfolio_value, risk_free_rate):
             "max_drawdown": "min((value - rolling_max) / rolling_max) * 100",
             "sharpe": "(mean(daily_return) * 252 - risk_free_rate) / (std(daily_return) * sqrt(252))",
             "sortino": "(mean(daily_return) * 252 - risk_free_rate) / (std(daily_return[daily_return<0]) * sqrt(252))",
+            "beta": "cov(rp, rb) / var(rb)",
+            "alpha_ann": "(((rp - rf_d).mean() - beta * (rb - rf_d).mean()) * 252) * 100",
         },
     }
 
@@ -257,12 +282,28 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                             prices, allocations, initial_investment, rebalance_freq
                         )
                         
-                        # Calculate metrics
-                        metrics = calculate_metrics(portfolio_value, risk_free_rate)
-                        
                         # Fetch and calculate benchmark
                         benchmark_value = None
                         benchmark_metrics = None
+                        if benchmark_symbol.strip():
+                            try:
+                                benchmark_prices = fetch_benchmark(start_date, end_date, benchmark_symbol.strip().upper())
+                                # Ensure it's a Series
+                                if isinstance(benchmark_prices, pd.DataFrame):
+                                    benchmark_prices = benchmark_prices.iloc[:, 0]
+                                # Align with portfolio dates
+                                common_idx = portfolio_value.index.intersection(benchmark_prices.index)
+                                if len(common_idx) > 0:
+                                    benchmark_prices = benchmark_prices.loc[common_idx]
+                                    # Calculate benchmark as buy-and-hold, starting exactly at initial_investment
+                                    # (Using prices/first_price keeps the series anchored on the first common date.)
+                                    benchmark_value = initial_investment * (benchmark_prices / benchmark_prices.iloc[0])
+                                    benchmark_metrics = calculate_metrics(benchmark_value, risk_free_rate)
+                            except Exception as e:
+                                st.warning(f"Could not fetch benchmark {benchmark_symbol}: {e}")
+
+                        # Calculate metrics (pass benchmark series so alpha/beta can be computed)
+                        metrics = calculate_metrics(portfolio_value, risk_free_rate, benchmark_value)
                         if benchmark_symbol.strip():
                             try:
                                 benchmark_prices = fetch_benchmark(start_date, end_date, benchmark_symbol.strip().upper())
@@ -363,6 +404,26 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                             help_text="Sharpe-like ratio using downside deviation (only negative returns)",
                         )
 
+                        # Alpha/Beta only make sense when benchmark exists
+                        if has_bench:
+                            alpha_str = "—" if metrics.get("alpha_ann") is None else f"{metrics['alpha_ann']:.2f}%"
+                            beta_str = "—" if metrics.get("beta") is None else f"{metrics['beta']:.2f}"
+
+                            row(
+                                "Alpha (ann.)",
+                                alpha_str,
+                                None,
+                                "0.00%",
+                                help_text="Annualized CAPM alpha vs benchmark (uses rf/252)",
+                            )
+                            row(
+                                "Beta",
+                                beta_str,
+                                None,
+                                "1.00",
+                                help_text="Beta vs benchmark = cov(rp, rb) / var(rb)",
+                            )
+
                         # Time period row (no delta)
                         row(
                             "Time Period",
@@ -383,6 +444,8 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                                         f"Max Drawdown (%):       {metrics['formulas']['max_drawdown']}",
                                         f"Sharpe Ratio:           {metrics['formulas']['sharpe']}",
                                         f"Sortino Ratio:          {metrics['formulas']['sortino']}",
+                                        f"Beta:                  {metrics['formulas']['beta']}",
+                                        f"Alpha (ann.):          {metrics['formulas']['alpha_ann']}",
                                     ]
                                 ),
                                 language="text",
