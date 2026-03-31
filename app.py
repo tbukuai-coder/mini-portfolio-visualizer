@@ -154,33 +154,65 @@ def calculate_portfolio(prices, allocations, initial_investment, rebalance_freq)
 
 
 def calculate_metrics(portfolio_value, risk_free_rate):
-    """Calculate portfolio performance metrics."""
+    """Calculate portfolio performance metrics.
+
+    Notes on definitions (aligned with common portfolio analytics libraries):
+
+    - Total Return (%): (final / initial - 1) * 100
+    - CAGR (%): ((final / initial) ** (1 / years) - 1) * 100
+    - Annualized Mean Return (%): mean(daily_return) * 252 * 100
+      (This is the same definition used in many libraries for Sharpe.)
+    - Volatility (%): std(daily_return) * sqrt(252) * 100
+
+    Where daily_return is computed from the portfolio value series.
+    """
+
     returns = portfolio_value.pct_change().dropna()
-    
-    total_return = (portfolio_value.iloc[-1] / portfolio_value.iloc[0] - 1) * 100
-    
+
+    initial_value = float(portfolio_value.iloc[0])
+    final_value = float(portfolio_value.iloc[-1])
+
+    total_return = (final_value / initial_value - 1) * 100
+
     years = (portfolio_value.index[-1] - portfolio_value.index[0]).days / 365.25
-    cagr = ((portfolio_value.iloc[-1] / portfolio_value.iloc[0]) ** (1/years) - 1) * 100
-    
-    volatility = returns.std() * np.sqrt(252) * 100
-    
+    cagr = ((final_value / initial_value) ** (1 / years) - 1) * 100
+
+    annual_return_mean = returns.mean() * 252  # decimal
+    annual_return_mean_pct = float(annual_return_mean) * 100
+
+    volatility = float(returns.std() * np.sqrt(252) * 100)
+
     # Max drawdown
     rolling_max = portfolio_value.cummax()
     drawdown = (portfolio_value - rolling_max) / rolling_max
-    max_drawdown = drawdown.min() * 100
-    
-    # Sharpe ratio
-    excess_returns = returns.mean() * 252 - risk_free_rate
-    sharpe = excess_returns / (returns.std() * np.sqrt(252)) if returns.std() > 0 else 0
-    
+    max_drawdown = float(drawdown.min() * 100)
+
+    # Sharpe ratio (uses annualized mean return)
+    sharpe = (
+        float((annual_return_mean - risk_free_rate) / (returns.std() * np.sqrt(252)))
+        if returns.std() > 0
+        else 0.0
+    )
+
     return {
-        "total_return": total_return,
-        "cagr": cagr,
+        "total_return": float(total_return),
+        "cagr": float(cagr),
+        "annual_return_mean": annual_return_mean_pct,
         "volatility": volatility,
         "max_drawdown": max_drawdown,
         "sharpe": sharpe,
-        "final_value": portfolio_value.iloc[-1],
-        "years": years
+        "initial_value": initial_value,
+        "final_value": final_value,
+        "years": float(years),
+        # Human-readable formulas for transparency / UI display
+        "formulas": {
+            "total_return": "(final / initial - 1) * 100",
+            "cagr": "((final / initial) ** (1 / years) - 1) * 100",
+            "annual_return_mean": "mean(daily_return) * 252 * 100",
+            "volatility": "std(daily_return) * sqrt(252) * 100",
+            "max_drawdown": "min((value - rolling_max) / rolling_max) * 100",
+            "sharpe": "(mean(daily_return) * 252 - risk_free_rate) / (std(daily_return) * sqrt(252))",
+        },
     }
 
 
@@ -259,23 +291,42 @@ if st.sidebar.button("🚀 Run Backtest", type="primary"):
                         )
                         
                         col1, col2, col3, col4 = st.columns(4)
-                        
+
                         col1.metric(
+                            "Annual Return (mean×252)",
+                            f"{metrics['annual_return_mean']:.2f}%",
+                            help="Annualized arithmetic return = mean(daily_return) * 252"
+                        )
+                        col2.metric(
                             "Volatility",
                             f"{metrics['volatility']:.2f}%"
                         )
-                        col2.metric(
+                        col3.metric(
                             "Max Drawdown",
                             f"{metrics['max_drawdown']:.2f}%"
                         )
-                        col3.metric(
+                        col4.metric(
                             "Time Period",
                             f"{metrics['years']:.1f} years"
                         )
-                        col4.metric(
-                            "Initial Investment",
-                            f"${initial_investment:,}"
-                        )
+
+                        # Show formulas (transparency / reference)
+                        with st.expander("🧮 Metric formulas"):
+                            st.code(
+                                "\n".join(
+                                    [
+                                        f"Total Return (%):        {metrics['formulas']['total_return']}",
+                                        f"CAGR (%):               {metrics['formulas']['cagr']}",
+                                        f"Annual Return (%):      {metrics['formulas']['annual_return_mean']}",
+                                        f"Volatility (%):         {metrics['formulas']['volatility']}",
+                                        f"Max Drawdown (%):       {metrics['formulas']['max_drawdown']}",
+                                        f"Sharpe Ratio:           {metrics['formulas']['sharpe']}",
+                                    ]
+                                ),
+                                language="text",
+                            )
+
+                        # (Initial investment is already shown above and used as the base for deltas)
                         
                         # Benchmark metrics
                         if benchmark_metrics:
