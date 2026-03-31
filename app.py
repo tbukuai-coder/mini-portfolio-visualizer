@@ -81,13 +81,16 @@ rebalance_freq = st.sidebar.selectbox(
 )
 
 # Risk-free rate for Sharpe
-risk_free_rate = st.sidebar.number_input(
+# Slider gives a nicer UX than freeform input.
+risk_free_rate_pct = st.sidebar.slider(
     "Risk-Free Rate (%)",
     min_value=0.0,
     max_value=10.0,
     value=2.0,
-    step=0.1
-) / 100
+    step=0.1,
+    help="Used in Sharpe ratio: (annual_return - risk_free_rate) / volatility",
+)
+risk_free_rate = risk_free_rate_pct / 100
 
 # Benchmark
 st.sidebar.markdown("### Benchmark")
